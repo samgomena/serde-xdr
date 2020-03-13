@@ -20,13 +20,20 @@ where
     Ok(())
 }
 
-pub fn from_reader<'a, T: Deserialize<'a>, R: Read + 'a>(reader: R) -> DecoderResult<(T, usize)> {
+pub fn from_reader<'a, T, R>(reader: R) -> DecoderResult<(T, usize)>
+where
+    T: Deserialize<'a>,
+    R: Read + 'a,
+{
     let mut de = Deserializer::new(reader);
     let value = Deserialize::deserialize(&mut de)?;
     Ok((value, de.get_bytes_consumed()))
 }
 
-pub fn from_bytes<'a, T: Deserialize<'a>>(v: &'a [u8]) -> DecoderResult<(T, usize)> {
+pub fn from_bytes<'a, T>(v: &'a [u8]) -> DecoderResult<(T, usize)>
+where
+    T: Deserialize<'a>,
+{
     from_reader(v)
 }
 
@@ -34,7 +41,7 @@ pub fn from_bytes<'a, T: Deserialize<'a>>(v: &'a [u8]) -> DecoderResult<(T, usiz
 macro_rules! xdr_enum {
     ($name:ident { $($variant:ident = $value:expr, )* }) => {
         #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-        pub enum<'a> $name {
+        pub enum $name<'a> {
             $($variant = $value,)*
         }
 
@@ -45,18 +52,18 @@ macro_rules! xdr_enum {
         }
 
         impl<'a> ::serde::Deserialize<'a> for $name<'a> {
-            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer<'a> {
 
                 struct Visitor;
 
-                impl ::serde::de::Visitor for Visitor {
-                    type Value = $name;
+                impl<'a> ::serde::de::Visitor<'a> for Visitor {
+                    type Value = $name<'a>;
 
                     fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                         formatter.write_str("i32")
                     }
 
-                    fn visit_i32<E>(self, value: i32) -> Result<$name, E> where E: ::serde::de::Error {
+                    fn visit_i32<E>(self, value: i32) -> Result<$name<'a>, E> where E: ::serde::de::Error {
                         match value {
                             $( $value => Ok($name::$variant), )*
                             _ => Err(E::custom(
