@@ -1,14 +1,12 @@
+use crate::errors::{DecoderResult, EncoderError};
+
 use byteorder::{BigEndian, ReadBytesExt};
 use serde::de::{self, Deserialize, IntoDeserializer, Visitor};
-// use serde_bytes::ByteBuf;
 use std::io::{self, Read};
-
-use crate::errors::{DecoderResult, EncoderError};
-// use std::result;
 
 macro_rules! not_implemented {
     ($($name:ident($($arg:ident: $ty:ty,)*);)*) => {
-        $(fn $name<V: Visitor<'de>>(self, $($arg: $ty,)* visitor: V) -> DecoderResult<V::Value> {
+        $(fn $name<V: Visitor<'de>>(self, $($arg: $ty,)* _visitor: V) -> DecoderResult<V::Value> {
             Err(EncoderError::Unknown(format!("XDR deserialize not implemented for {}", stringify!($name))))
         })*
     }
@@ -17,7 +15,7 @@ macro_rules! not_implemented {
 // impl_num!(u16, deserialize_u16, visit_u16, read_u16, 2);
 macro_rules! impl_num {
     ($ty:ty, $deserialize_method:ident, $visitor_method:ident, $read_method:ident, $byte_size:expr) => {
-        fn $deserialize_method<V>(self, mut visitor: V) -> DecoderResult<V::Value>
+        fn $deserialize_method<V>(self, visitor: V) -> DecoderResult<V::Value>
             where V: Visitor<'de>, {
                 let res = visitor.$visitor_method(self.$read_method::<BigEndian>()?);
                 self.bytes_consumed += $byte_size;
@@ -51,6 +49,7 @@ where
     }
 }
 
+#[derive(Debug)]
 enum XdrEnumType {
     Enum,
     Union,
@@ -96,14 +95,14 @@ where
         self.deserialize_str(visitor)
     }
 
-    fn deserialize_string<V>(self, mut visitor: V) -> DecoderResult<V::Value>
+    fn deserialize_string<V>(self, visitor: V) -> DecoderResult<V::Value>
     where
         V: de::Visitor<'de>,
     {
         let count: u32 = self.read_u32::<BigEndian>()?;
         let extra_bytes = 4 - count % 4;
         let mut accum = String::new();
-        for c in 0..count {
+        for _ in 0..count {
             accum.push(self.read_u8()? as char);
         }
         self.bytes_consumed += (extra_bytes + count + 4) as usize;
@@ -126,17 +125,17 @@ where
         }
     }
 
-    fn deserialize_byte_buf<V: Visitor<'de>>(self, mut visitor: V) -> DecoderResult<V::Value> {
+    fn deserialize_byte_buf<V: Visitor<'de>>(self, mut _visitor: V) -> DecoderResult<V::Value> {
         Err(EncoderError::Unknown(String::from("not done implementing")))
     }
 
-    fn deserialize_any<V: Visitor<'de>>(self, mut visitor: V) -> DecoderResult<V::Value> {
+    fn deserialize_any<V: Visitor<'de>>(self, mut _visitor: V) -> DecoderResult<V::Value> {
         Err(EncoderError::Unknown(String::from(
             "Generic Deserialize method not implemented since XDR is not self describing",
         )))
     }
 
-    fn deserialize_bool<V: Visitor<'de>>(self, mut visitor: V) -> DecoderResult<V::Value> {
+    fn deserialize_bool<V: Visitor<'de>>(self, visitor: V) -> DecoderResult<V::Value> {
         let value: u8 = Deserialize::deserialize(self)?;
         match value {
             1 => visitor.visit_bool(true),
@@ -147,13 +146,13 @@ where
         }
     }
 
-    fn deserialize_u8<V: Visitor<'de>>(self, mut visitor: V) -> DecoderResult<V::Value> {
+    fn deserialize_u8<V: Visitor<'de>>(self, visitor: V) -> DecoderResult<V::Value> {
         let res = visitor.visit_u8(self.read_u8()?);
         self.bytes_consumed += 1;
         res
     }
 
-    fn deserialize_i8<V: Visitor<'de>>(self, mut visitor: V) -> DecoderResult<V::Value> {
+    fn deserialize_i8<V: Visitor<'de>>(self, visitor: V) -> DecoderResult<V::Value> {
         let res = visitor.visit_i8(self.read_i8()?);
         self.bytes_consumed += 1;
         res
@@ -161,9 +160,9 @@ where
 
     fn deserialize_struct<V>(
         self,
-        name: &'static str,
+        _name: &'static str,
         fields: &'static [&'static str],
-        mut visitor: V,
+        visitor: V,
     ) -> DecoderResult<V::Value>
     where
         V: de::Visitor<'de>,
@@ -173,8 +172,8 @@ where
 
     fn deserialize_newtype_struct<V>(
         self,
-        name: &'static str,
-        mut visitor: V,
+        _name: &'static str,
+        visitor: V,
     ) -> DecoderResult<V::Value>
     where
         V: de::Visitor<'de>,
@@ -182,28 +181,24 @@ where
         visitor.visit_newtype_struct(self)
     }
 
-    fn deserialize_seq<V>(self, mut visitor: V) -> DecoderResult<V::Value>
+    fn deserialize_seq<V>(self, visitor: V) -> DecoderResult<V::Value>
     where
         V: Visitor<'de>,
     {
         visitor.visit_seq(SeqVisitor::new(self, None))
     }
-
-    // fn deserialize_seq<V: Visitor<'a>>(
-    //     self,
-    //     len: usize,
-    //     mut visitor: V,
-    // ) -> DecoderResult<V::Value> {
-    //     visitor.visit_seq(SeqVisitor::new(self, Some(len as u32)))
-    // }
 }
 
-impl<R: Read> Read for Deserializer<R> {
+impl<R> Read for Deserializer<R>
+where
+    R: Read,
+{
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         self.reader.read(buf)
     }
 }
 
+#[derive(Debug)]
 struct SeqVisitor<'a, R>
 where
     R: Read,
@@ -244,7 +239,6 @@ where
                 Some(v) => *v = len - 1,
                 None => {}
             }
-            // let value = seed.deserialize(&mut *self.deserializer)?;
             let value = seed.deserialize(&mut *self.deserializer)?;
             Ok(Some(value))
         } else {
@@ -259,14 +253,13 @@ where
 {
     type Error = EncoderError;
 
-    fn newtype_variant_seed<T>(self, seed: T) -> DecoderResult<T::Value>
+    fn newtype_variant_seed<T>(self, _seed: T) -> DecoderResult<T::Value>
     where
         T: de::DeserializeSeed<'de>,
     {
         Err(EncoderError::Unknown(format!(
             "XDR deserialize not implemented for"
         )))
-        //seed.deserialize(self)
     }
 
     fn unit_variant(self) -> DecoderResult<()> {
@@ -280,23 +273,21 @@ where
         Err(EncoderError::Unknown(format!(
             "XDR deserialize not implemented for"
         )))
-        //de::Deserialize::deserialize(self)
     }
 
-    fn tuple_variant<V>(self, _len: usize, visitor: V) -> DecoderResult<V::Value>
+    fn tuple_variant<V>(self, _len: usize, _visitor: V) -> DecoderResult<V::Value>
     where
         V: de::Visitor<'de>,
     {
         Err(EncoderError::Unknown(format!(
             "XDR deserialize not implemented for"
         )))
-        //de::Deserializer::deserialize(self, visitor)
     }
 
     fn struct_variant<V>(
         self,
         _fields: &'static [&'static str],
-        visitor: V,
+        _visitor: V,
     ) -> DecoderResult<V::Value>
     where
         V: de::Visitor<'de>,
@@ -307,6 +298,7 @@ where
     }
 }
 
+#[derive(Debug)]
 struct VariantVisitor<'a, R>
 where
     R: Read,
@@ -363,7 +355,7 @@ where
                         }
                     };
                 }
-                let mut des = union_index.into_deserializer();
+                let des = union_index.into_deserializer();
                 let val: Result<V::Value, de::value::Error> = seed.deserialize(des);
                 Ok((val.unwrap(), self))
             }
