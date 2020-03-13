@@ -34,17 +34,17 @@ pub fn from_bytes<'a, T: Deserialize<'a>>(v: &'a [u8]) -> DecoderResult<(T, usiz
 macro_rules! xdr_enum {
     ($name:ident { $($variant:ident = $value:expr, )* }) => {
         #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-        pub enum $name {
+        pub enum<'a> $name {
             $($variant = $value,)*
         }
 
-        impl ::serde::Serialize for $name {
+        impl<'a> ::serde::Serialize<'a> for $name<'a> {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error> where S: ::serde::Serializer {
                 serializer.serialize_i32(*self as i32) // All Enums are signed ints in XDR
             }
         }
 
-        impl ::serde::Deserialize for $name {
+        impl<'a> ::serde::Deserialize<'a> for $name<'a> {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error> where D: ::serde::Deserializer {
 
                 struct Visitor;
