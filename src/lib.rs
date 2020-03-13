@@ -1,6 +1,3 @@
-// #![cfg_attr(test, feature(custom_attribute, custom_derive, plugin))]
-
-extern crate byteorder;
 use serde;
 
 pub mod deserializer;
