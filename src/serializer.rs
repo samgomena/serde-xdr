@@ -18,7 +18,7 @@ pub struct Serializer<W> {
 
 impl<W: io::Write> Serializer<W> {
     pub fn new(writer: W) -> Self {
-        Serializer { writer: writer }
+        Serializer { writer }
     }
 
     pub fn into_inner(self) -> W {
@@ -235,7 +235,6 @@ impl<'a, W: io::Write> ser::Serializer for &'a mut Serializer<W> {
                     ser: self,
                     size: Some((variant_idx + 1) as usize),
                 })
-                //Err(EncoderError::Unknown(String::from("You probably modified a codegen'd file. stop that shit")))
             }
         }
     }

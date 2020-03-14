@@ -39,7 +39,7 @@ where
 {
     pub fn new(reader: R) -> Deserializer<R> {
         Deserializer {
-            reader: reader,
+            reader,
             bytes_consumed: 0,
         }
     }
@@ -106,7 +106,7 @@ where
             accum.push(self.read_u8()? as char);
         }
         self.bytes_consumed += (extra_bytes + count + 4) as usize;
-        return visitor.visit_string(accum);
+        visitor.visit_string(accum)
     }
 
     fn deserialize_enum<V>(
@@ -229,15 +229,13 @@ where
     where
         V: de::DeserializeSeed<'de>,
     {
-        if let None = self.len {
+        if self.len.is_none() {
             self.len = Some(Deserialize::deserialize(&mut *self.deserializer)?);
         }
         let len = self.len.unwrap();
         if len > 0 {
-            match self.len.iter_mut().next() {
-                // TODO there is probably an easier way to grab a mut ref to an option
-                Some(v) => *v = len - 1,
-                None => {}
+            if let Some(v) = self.len.iter_mut().next() {
+                *v = len - 1
             }
             let value = seed.deserialize(&mut *self.deserializer)?;
             Ok(Some(value))
@@ -257,8 +255,8 @@ where
     where
         T: de::DeserializeSeed<'de>,
     {
-        Err(EncoderError::Unknown(format!(
-            "XDR deserialize not implemented for"
+        Err(EncoderError::Unknown(String::from(
+            "XDR deserialize not implemented for this type",
         )))
     }
 
@@ -270,8 +268,8 @@ where
     where
         T: de::Deserialize<'de>,
     {
-        Err(EncoderError::Unknown(format!(
-            "XDR deserialize not implemented for"
+        Err(EncoderError::Unknown(String::from(
+            "XDR deserialize not implemented for this type",
         )))
     }
 
@@ -279,8 +277,8 @@ where
     where
         V: de::Visitor<'de>,
     {
-        Err(EncoderError::Unknown(format!(
-            "XDR deserialize not implemented for"
+        Err(EncoderError::Unknown(String::from(
+            "XDR deserialize not implemented for this type",
         )))
     }
 
@@ -292,8 +290,8 @@ where
     where
         V: de::Visitor<'de>,
     {
-        Err(EncoderError::Unknown(format!(
-            "XDR deserialize not implemented for"
+        Err(EncoderError::Unknown(String::from(
+            "XDR deserialize not implemented for this type",
         )))
     }
 }
@@ -318,9 +316,9 @@ where
         variants: &'static [&'static str],
     ) -> Self {
         VariantVisitor {
-            de: de,
-            style: style,
-            variants: variants,
+            de,
+            style,
+            variants,
         }
     }
 }
@@ -339,6 +337,9 @@ where
         match self.style {
             XdrEnumType::Union => {
                 let enum_index: u32 = Deserialize::deserialize(&mut *self.de)?;
+                // Clippy thinks this can be re-written as a let if but it can't because we're returning from
+                // the None variant of the match and that jacks it all up.
+                #[allow(clippy::useless_let_if_seq)]
                 let mut union_index: u32 = (self.variants.len() - 1) as u32;
                 if enum_index < self.variants.len() as u32 {
                     let ids = self
@@ -349,12 +350,13 @@ where
                     union_index = match ids {
                         Some(idx) => idx as u32,
                         None => {
-                            return Err(EncoderError::Unknown(format!(
-                                "Bad Index for Union, the codegen annotations are broken probably"
+                            return Err(EncoderError::Unknown(String::from(
+                                "Bad Index for Union, the codegen annotations are broken probably",
                             )));
                         }
                     };
                 }
+
                 let des = union_index.into_deserializer();
                 let val: Result<V::Value, de::value::Error> = seed.deserialize(des);
                 Ok((val.unwrap(), self))

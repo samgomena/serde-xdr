@@ -24,25 +24,16 @@ impl From<EncoderError> for io::Error {
     }
 }
 
-//impl fmt::Display for EncoderError {
-//    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-//        match self {
-//            &EncoderError::Io(ref inner) => inner.fmt(fmt),
-//            &EncoderError::Unknown(ref inner) => inner.fmt(fmt),
-//        }
-//    }
-//}
-
 impl error::Error for EncoderError {
     fn description(&self) -> &str {
-        match self {
-            &EncoderError::Io(ref inner) => inner.description(),
-            &EncoderError::Unknown(ref inner) => inner,
+        match *self {
+            EncoderError::Io(ref inner) => inner.description(),
+            EncoderError::Unknown(ref inner) => inner,
         }
     }
     fn cause(&self) -> Option<&dyn error::Error> {
-        match self {
-            &EncoderError::Io(ref inner) => Some(inner),
+        match *self {
+            EncoderError::Io(ref inner) => Some(inner),
             _ => None,
         }
     }
@@ -62,17 +53,12 @@ impl de::Error for EncoderError {
 
 impl Display for EncoderError {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            &EncoderError::Unknown(ref s) => write!(fmt, "{}", s),
-            &EncoderError::Io(ref error) => fmt::Display::fmt(error, fmt),
+        match *self {
+            EncoderError::Unknown(ref s) => write!(fmt, "{}", s),
+            EncoderError::Io(ref error) => fmt::Display::fmt(error, fmt),
         }
     }
 }
-
-//fn end_of_stream() -> EncoderError {
-//    EncoderError::Unknown(String::from("End of File!"))
-//}
-//}
 
 pub type EncoderResult<T> = Result<T, EncoderError>;
 pub type DecoderResult<T> = Result<T, EncoderError>;
