@@ -12,3 +12,6 @@ For instance, the serializer and deserializer were mostly rewritten to support t
 
 ## Testing
 `cargo test`
+
+## Related Projects
+- [serde-xdr](https://github.com/jvff/serde-xdr)
